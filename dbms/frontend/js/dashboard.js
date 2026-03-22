@@ -87,7 +87,8 @@ async function loadDashboardRefugees() {
   tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--color-text-muted)">Loading...</td></tr>';
   const res = await apiFetch('/api/dashboard/refugees?limit=100');
   if (!res.success) { showToast('Failed to load refugees', 'error'); return; }
-  const items = res.data.items;
+  const allItems = res.data.items;
+  const items = allItems.filter(r => r.processed !== 'Released');
   _dashboardRefugees = items;
   if (!items.length) {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--color-text-muted)">No refugees registered yet</td></tr>';
@@ -95,7 +96,7 @@ async function loadDashboardRefugees() {
   }
   tbody.innerHTML = items.map(r => `
     <tr id="dash-refugee-row-${r.reg_id}">
-      <td class="font-mono" style="font-size:11px">${r.provisional_id || '—'}</td>
+      <td class="font-mono" style="font-size:11px">${r.provisional_id || '—'}<br><button class="btn btn-primary btn-sm" style="font-size:10px;padding:4px 8px;margin-top:6px;cursor:pointer" onclick="promptReleaseRefugee('${r.reg_id}')">Processed: ${r.processed || 'at camp'}</button></td>
       <td><strong>${r.name}</strong></td>
       <td>${r.nationality}</td>
       <td>${r.force || '—'}</td>
@@ -103,7 +104,7 @@ async function loadDashboardRefugees() {
       <td>${r.assigned_camp || '—'}</td>
       <td>${r.assigned_ngo ? `<span style="color:var(--color-success);font-weight:600">${r.assigned_ngo}</span>` : '<span style="color:var(--color-text-muted)">Unassigned</span>'}</td>
       <td>${statusBadge(r.reg_status || r.entity_status || 'Active')}</td>
-      <td><button class="btn btn-secondary btn-sm" onclick="openEditRefugeeModal(${r.reg_id})">✏ Edit</button></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openEditRefugeeModal('${r.reg_id}')">✏ Edit</button></td>
     </tr>`).join('');
 }
 
@@ -130,7 +131,7 @@ async function loadNgoAssignmentsTab() {
 
   tbody.innerHTML = items.map(r => `
     <tr id="ngo-row-${r.reg_id}">
-      <td class="font-mono" style="font-size:11px">${r.provisional_id || '—'}</td>
+      <td class="font-mono" style="font-size:11px">${r.provisional_id || '—'}<br><span style="color:var(--color-primary);font-size:10px">Processed: ${r.processed || 'at camp'}</span></td>
       <td><strong>${r.name}</strong></td>
       <td>${r.nationality}</td>
       <td>${r.force || '—'}</td>
@@ -347,6 +348,17 @@ async function loadNgoMgmtTab() {
     return;
   }
   
+  const pendingSelect = document.getElementById('pending-ngo-select');
+  if (pendingSelect) {
+    const pendingNgos = ngos.filter(n => n.status === 'pending');
+    if (pendingNgos.length) {
+      pendingSelect.innerHTML = '<option value="">— Select Pending Request —</option>' + 
+        pendingNgos.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+    } else {
+      pendingSelect.innerHTML = '<option value="">No Pending Requests</option>';
+    }
+  }
+  
   tbody.innerHTML = ngos.map(ngo => {
     let focus = ngo.focus_area || '—';
     let contact = `<div>${ngo.contact_person || '—'}</div><div style="font-size:11px;color:var(--color-text-muted)">${ngo.contact_email || ''}</div>`;
@@ -406,34 +418,13 @@ async function reactivateNgo(id) {
   if (res.success) { showToast('NGO Reactivated', 'success'); loadNgoMgmtTab(); }
   else showToast(res.message, 'error');
 }
-
-function openAddNgoModal() {
-  document.getElementById('add-ngo-form').reset();
-  document.getElementById('add-ngo-modal').style.display = 'flex';
-}
-
-async function submitAddNgoForm(e) {
-  e.preventDefault();
-  const btn = document.getElementById('btn-save-ngo');
-  btn.disabled = true;
-  const payload = {
-    name: document.getElementById('ngo-name').value,
-    focus_area: document.getElementById('ngo-focus').value,
-    contact_person: document.getElementById('ngo-contact-person').value,
-    contact_email: document.getElementById('ngo-contact-email').value,
-    max_capacity: parseInt(document.getElementById('ngo-capacity').value) || 0
-  };
-  const res = await apiFetch('/api/dashboard/ngos', { method: 'POST', body: payload });
-  btn.disabled = false;
-  if (res.success) {
-    document.getElementById('add-ngo-modal').style.display = 'none';
-    showToast('NGO Added', 'success');
-    if (document.getElementById('dash-tab-ngo-mgmt').classList.contains('active')) {
-      loadNgoMgmtTab();
-    }
-  } else {
-    showToast(res.message, 'error');
+async function acceptSelectedNgo() {
+  const sel = document.getElementById('pending-ngo-select');
+  if (!sel || !sel.value) {
+    showToast('Please select a pending NGO request', 'warning');
+    return;
   }
+  await approveNgo(sel.value);
 }
 
 // ── Unit Statistics ─────────────────────────────────────────────────
@@ -522,7 +513,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('#refugee-tab-bar .tab-item').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('#refugee-tab-bar .tab-item').forEach(t => t.classList.remove('active'));
-      ['dash-tab-refugees','dash-tab-ngo','dash-tab-ngo-mgmt','dash-tab-unit-stats'].forEach(id => {
+      ['dash-tab-refugees','dash-tab-released','dash-tab-ngo','dash-tab-ngo-mgmt','dash-tab-unit-stats'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('active');
       });
@@ -530,6 +521,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const target = document.getElementById(tab.dataset.tab);
       if (target) target.classList.add('active');
       if (tab.dataset.tab === 'dash-tab-refugees') loadDashboardRefugees();
+      if (tab.dataset.tab === 'dash-tab-released') loadReleasedRefugeesTab();
       if (tab.dataset.tab === 'dash-tab-ngo') loadNgoAssignmentsTab();
       if (tab.dataset.tab === 'dash-tab-ngo-mgmt') loadNgoMgmtTab();
       if (tab.dataset.tab === 'dash-tab-unit-stats') loadUnitStats();
@@ -556,4 +548,109 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadDashboardRefugees();
   loadAlerts();
 });
+
+// ── Released Refugees Tab ─────────────────────────────────────
+window.loadReleasedRefugeesTab = async function() {
+  const tbody = document.getElementById('dash-released-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--color-text-muted)">Loading...</td></tr>';
+  
+  const res = await apiFetch('/api/dashboard/refugees?released=true&limit=200');
+  if (!res.success) { showToast('Failed to load released refugees', 'error'); return; }
+  
+  const items = res.data.items;
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--color-text-muted)">No released refugees yet</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = items.map(r => `
+    <tr>
+      <td class="font-mono" style="font-size:11px">${r.provisional_id || '—'}<br>
+        <button class="btn btn-secondary btn-sm" style="font-size:10px;padding:4px 8px;margin-top:6px;cursor:pointer" onclick="promptUndoReleaseRefugee('${r.reg_id}')">Revert to Camp</button>
+      </td>
+      <td><strong>${r.name}</strong></td>
+      <td>${r.nationality}</td>
+      <td>${r.force || '—'}</td>
+      <td>${formatDateTime(r.registration_date)}</td>
+      <td>${r.assigned_camp || '—'}</td>
+      <td>${r.assigned_ngo || '—'}</td>
+      <td>${statusBadge(r.reg_status)}</td>
+    </tr>`).join('');
+};
+
+window.promptReleaseRefugee = async function(regId) {
+  if (!confirm('Are you sure you want to release this refugee?')) return;
+  const officer_id = prompt('Enter Authorizing Officer ID:', 'OFF-001');
+  if (!officer_id) {
+    showToast('Officer ID is required for authorization', 'error');
+    return;
+  }
+  
+  showToast('Authorizing release...', 'info');
+  const res = await apiFetch(`/api/dashboard/refugees/${regId}/release`, {
+    method: 'POST',
+    body: JSON.stringify({ officer_id: officer_id.trim() })
+  });
+  
+  if (res.success) {
+    showToast('Refugee released successfully', 'success');
+    loadDashboardRefugees();
+    loadReleasedRefugeesTab();
+  } else {
+    showToast(res.message || 'Failed to authorize release', 'error');
+  }
+};
+
+window.submitReleaseRefugee = async function(regId) {
+  const officerInput = document.getElementById('release-override-officer');
+  if (!officerInput) return;
+  const officer_id = officerInput.value.trim();
+  if (!officer_id) {
+    showToast('Officer ID is required for authorization', 'error');
+    return;
+  }
+  
+  const btn = document.getElementById('btn-submit-release');
+  if (btn) { btn.disabled = true; btn.textContent = 'Authorizing...'; }
+  
+  const res = await apiFetch(`/api/dashboard/refugees/${regId}/release`, {
+    method: 'POST',
+    body: { officer_id }
+  });
+  
+  if (res.success) {
+    showToast('Refugee released successfully', 'success');
+    document.getElementById('release-refugee-modal').style.display = 'none';
+    if (btn) { btn.disabled = false; btn.textContent = 'Authorize Release'; }
+    loadDashboardRefugees();
+    loadReleasedRefugeesTab();
+  } else {
+    if (btn) { btn.disabled = false; btn.textContent = 'Authorize Release'; }
+    showToast(res.message || 'Failed to authorize release', 'error');
+  }
+};
+
+window.promptUndoReleaseRefugee = async function(regId) {
+  if (!confirm('Are you sure you want to revert this refugee back to "at camp"?')) return;
+  const officer_id = prompt('Enter Authorizing Officer ID to revert:', 'OFF-001');
+  if (!officer_id) {
+    showToast('Officer ID is required for authorization', 'error');
+    return;
+  }
+  
+  showToast('Authorizing reversion...', 'info');
+  const res = await apiFetch(`/api/dashboard/refugees/${regId}/undo-release`, { 
+    method: 'POST',
+    body: JSON.stringify({ officer_id: officer_id.trim() })
+  });
+  
+  if (res.success) {
+    showToast('Refugee reverted to camp successfully', 'success');
+    loadDashboardRefugees();
+    loadReleasedRefugeesTab();
+  } else {
+    showToast(res.message || 'Failed to revert', 'error');
+  }
+};
 

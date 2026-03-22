@@ -172,7 +172,8 @@ def init_db():
             ("health_clearance_at", "DATETIME"),
             ("customs_clearance", "INTEGER DEFAULT 1"),
             ("customs_clearance_by", "TEXT"),
-            ("customs_clearance_at", "DATETIME")
+            ("customs_clearance_at", "DATETIME"),
+            ("departed_at", "TEXT")
         ]
         
         for col_name, col_type in cols_to_add:
@@ -212,6 +213,12 @@ def init_db():
         conn.commit()
     if na_cols and 'medical_review_done' not in na_cols:
         conn.execute("ALTER TABLE ngo_assignments ADD COLUMN medical_review_done INTEGER DEFAULT 0")
+        conn.commit()
+
+    cursor = conn.execute("PRAGMA table_info(refugee_registrations)")
+    rr_cols = [row['name'] for row in cursor.fetchall()]
+    if rr_cols and 'processed' not in rr_cols:
+        conn.execute("ALTER TABLE refugee_registrations ADD COLUMN processed TEXT DEFAULT 'at camp'")
         conn.commit()
 
     

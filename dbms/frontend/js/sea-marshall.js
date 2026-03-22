@@ -57,7 +57,52 @@ function updateKPIs(vessels) {
 function renderVesselTable(vessels) {
   const tbody = document.getElementById('vessel-tbody');
   if (!tbody) return;
-  tbody.innerHTML = vessels.map(v => {
+  const viewMode = document.getElementById('vessel-view-mode')?.value || 'active';
+  const now = new Date();
+
+  const activeVessels = [];
+  const historyVessels = [];
+
+  vessels.forEach(v => {
+    if (v.movement_status === 'DEPARTING' && v.departed_at) {
+      let dStr = v.departed_at;
+      if (!dStr.endsWith('Z') && dStr.includes(' ')) dStr = dStr.replace(' ', 'T') + 'Z';
+      const depDate = new Date(dStr);
+      const daysPassed = Math.floor((now - depDate) / (1000 * 60 * 60 * 24));
+      v._daysPassed = Math.max(0, daysPassed);
+      
+      if (daysPassed >= 7) {
+        historyVessels.push(v);
+      } else {
+        activeVessels.push(v);
+      }
+    } else {
+      activeVessels.push(v);
+    }
+  });
+
+  const displayList = viewMode === 'active' ? activeVessels : historyVessels;
+
+  if (viewMode === 'history') {
+    tbody.innerHTML = displayList.map(v => {
+      return `
+      <tr id="row-${v.imo}">
+        <td colspan="14" style="padding:12px 16px">
+          <div style="display:flex; justify-content:space-between; align-items:center; width:100%">
+            <span><strong>IMO:</strong> ${v.imo}</span>
+            <span><strong>Name:</strong> ${v.vessel_name}</span>
+            <span><strong>Type:</strong> ${v.vessel_type}</span>
+            <span><strong>Flag:</strong> ${v.flag_state.split('(')[0].trim()}</span>
+            <span><strong>Departed On:</strong> ${formatDate(v.departed_at)}</span>
+            <button class="btn btn-secondary btn-sm" onclick="inspectVessel('${v.imo}')">View Details</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--color-text-muted)">No historical departed vessel records found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = displayList.map(v => {
     const isFlagged    = v.is_flagged || v.status === 'FLAGGED_ILLEGAL';
     const isUnverified = v.status === 'UNVERIFIED';
     const rowClass     = isFlagged ? 'row-flagged' : (isUnverified ? 'row-unverified' : '');
@@ -77,6 +122,11 @@ function renderVesselTable(vessels) {
       clHtml += `<div style="margin-top:6px"><span class="badge" style="background:var(--color-alert);color:#fff;font-size:10px;width:100%;text-align:center;padding:3px 6px">Denied</span></div>`;
     }
 
+    let movHtml = `<span class="mov-badge" style="color:${m.color};font-size:13px">${m.icon} ${m.label}</span>`;
+    if (mov === 'DEPARTING' && v.departed_at) {
+       movHtml += `<div style="font-size:10px;color:var(--color-text-muted);margin-top:4px;font-weight:600">Day ${v._daysPassed + 1} of 7</div>`;
+    }
+
     return `
     <tr class="${rowClass}" id="row-${v.imo}">
       <td><span class="font-mono">${isFlagged ? '<span class="flag-pulse"></span> ' : ''}</span>${v.imo}</td>
@@ -89,7 +139,7 @@ function renderVesselTable(vessels) {
       <td class="font-mono">${v.eta||'—'}</td>
       <td>${v.captain||'—'}</td>
       <td class="font-mono">${v.crew_count||'—'}</td>
-      <td><span class="mov-badge" style="color:${m.color};font-size:13px">${m.icon} ${m.label}</span></td>
+      <td>${movHtml}</td>
       <td>${statusBadge(v.status)}</td>
       <td>${clHtml}</td>
       <td>
@@ -213,6 +263,12 @@ async function setMovementStatus(imo, newMov, btnEl) {
       showToast('Cannot depart: Vessel requires BOTH Health and Customs clearance first.', 'error');
       return;
     }
+    const confirmed = await confirmDialog({
+      title: 'Confirm Vessel Departure',
+      message: `<strong>Vessel:</strong> ${v.vessel_name || imo}<br><strong>IMO:</strong> ${imo}<br><br>Are you sure you want to mark this vessel as departed? This will start a 7-day tracking timer before moving it to history.`,
+      confirmText: 'Confirm Departure'
+    });
+    if (!confirmed) return;
   }
 
   const currentMov = v.movement_status || 'APPROACHING';
@@ -241,11 +297,10 @@ async function setMovementStatus(imo, newMov, btnEl) {
     btnEl.style.background = `${m.color}18`;
     btnEl.style.borderColor = m.color;
     // Update table row
-    const row = document.getElementById(`row-${imo}`);
-    if (row) {
-      const posCell = row.cells[10];
-      if (posCell) posCell.innerHTML = `<span class="mov-badge" style="color:${m.color};font-size:13px">${m.icon} ${m.label}</span>`;
-    }
+    // Force complete redraw to properly handle timer UI
+    document.getElementById('vessel-tbody').innerHTML = '<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--color-text-muted)">Reloading traffic data...</td></tr>';
+    await loadVessels();
+    
     showToast(`Movement status updated: ${m.icon} ${m.label}`, 'success');
     loadSeaCharts();
   } else {

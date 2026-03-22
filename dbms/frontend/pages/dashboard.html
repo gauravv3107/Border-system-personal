@@ -150,6 +150,7 @@
 
       <div class="tab-bar" id="refugee-tab-bar">
         <div class="tab-item active" data-tab="dash-tab-refugees">Registered Refugees</div>
+        <div class="tab-item" data-tab="dash-tab-released">Released Refugees</div>
         <div class="tab-item" data-tab="dash-tab-ngo">NGO Assignments</div>
         <div class="tab-item" data-tab="dash-tab-ngo-mgmt">NGO Management</div>
         <div class="tab-item" data-tab="dash-tab-unit-stats">Unit Statistics</div>
@@ -175,6 +176,31 @@
               <th>Actions</th>
             </tr></thead>
             <tbody id="dash-refugee-tbody">
+              <tr><td colspan="8" style="text-align:center;padding:20px;color:var(--color-text-muted)">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Released Refugees -->
+      <div class="tab-content" id="dash-tab-released">
+        <div class="filter-bar">
+          <div style="font-size:13px;color:var(--color-text-muted)">Architectural log of refugees officially released from camp</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadReleasedRefugeesTab()">↻ Refresh</button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr>
+              <th>Provisional ID</th>
+              <th>Name</th>
+              <th>Nationality</th>
+              <th>Force</th>
+              <th>Registration Date</th>
+              <th>Camp</th>
+              <th>Assigned NGO</th>
+              <th>Status</th>
+            </tr></thead>
+            <tbody id="dash-released-tbody">
               <tr><td colspan="8" style="text-align:center;padding:20px;color:var(--color-text-muted)">Loading...</td></tr>
             </tbody>
           </table>
@@ -216,8 +242,11 @@
             </select>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-secondary btn-sm" onclick="loadNgoMgmtTab()">↻ Refresh</button>
-            <button class="btn btn-primary btn-sm" onclick="openAddNgoModal()">+ Add NGO</button>
+            <select id="pending-ngo-select" style="padding:4px 8px;font-size:13px;border-radius:4px" class="form-input">
+              <option value="">No Pending Requests</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="acceptSelectedNgo()">Accept</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadNgoMgmtTab()">↻</button>
           </div>
         </div>
         <div class="table-wrapper">
@@ -323,45 +352,6 @@
   </div>
 </div>
 
-<!-- Add NGO Modal -->
-<div class="modal-overlay" id="add-ngo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
-  <div class="modal-card" style="background:var(--color-surface);border-radius:var(--radius-lg);width:480px;max-width:90vw;box-shadow:0 10px 30px rgba(0,0,0,0.2)">
-    <div style="padding:20px;border-bottom:1px solid var(--color-border);display:flex;justify-content:space-between;align-items:center">
-      <h3 style="font-size:16px;font-weight:700">Add New NGO</h3>
-      <button onclick="document.getElementById('add-ngo-modal').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer">&times;</button>
-    </div>
-    <div style="padding:20px">
-      <form id="add-ngo-form" onsubmit="submitAddNgoForm(event)">
-        <div style="margin-bottom:12px">
-          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">NGO Name *</label>
-          <input type="text" id="ngo-name" required class="form-input" style="width:100%;padding:8px;border:1px solid var(--color-border);border-radius:var(--radius-sm)">
-        </div>
-        <div style="margin-bottom:12px">
-          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Focus Area</label>
-          <input type="text" id="ngo-focus" placeholder="e.g. Legal Aid, Medical" class="form-input" style="width:100%;padding:8px;border:1px solid var(--color-border);border-radius:var(--radius-sm)">
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-          <div>
-            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Contact Person</label>
-            <input type="text" id="ngo-contact-person" class="form-input" style="width:100%;padding:8px;border:1px solid var(--color-border);border-radius:var(--radius-sm)">
-          </div>
-          <div>
-            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Email</label>
-            <input type="email" id="ngo-contact-email" class="form-input" style="width:100%;padding:8px;border:1px solid var(--color-border);border-radius:var(--radius-sm)">
-          </div>
-        </div>
-        <div style="margin-bottom:20px">
-          <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Max Capacity</label>
-          <input type="number" id="ngo-capacity" min="0" value="100" class="form-input" style="width:100%;padding:8px;border:1px solid var(--color-border);border-radius:var(--radius-sm)">
-        </div>
-        <div style="display:flex;justify-content:flex-end;gap:8px">
-          <button type="button" class="btn btn-secondary" onclick="document.getElementById('add-ngo-modal').style.display='none'">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="btn-save-ngo">Save NGO</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 
 <!-- Edit Refugee Modal -->
 <div class="modal-overlay" id="edit-refugee-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
@@ -415,6 +405,26 @@
   </div>
 </div>
 
+<!-- Release Refugee Modal -->
+<div class="modal-overlay" id="release-refugee-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;align-items:center;justify-content:center;">
+  <div class="modal-card" style="background:var(--color-surface);border-radius:var(--radius-lg);width:480px;max-width:90vw;box-shadow:0 10px 30px rgba(0,0,0,0.2)">
+    <div style="padding:20px;border-bottom:1px solid var(--color-border);display:flex;justify-content:space-between;align-items:center">
+      <h3 style="font-size:16px;font-weight:700">Authorize Refugee Release</h3>
+      <button onclick="document.getElementById('release-refugee-modal').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer">&times;</button>
+    </div>
+    <div style="padding:20px">
+      <div style="margin-bottom:12px;font-size:13px;color:var(--color-text-muted)">
+        Releasing this refugee removes them from the active camp registry. <strong style="color:var(--color-danger)">Officer Override Required.</strong>
+      </div>
+      <label style="display:block;font-size:12px;font-weight:600;margin-bottom:8px">Authorizing Officer ID *</label>
+      <input type="text" id="release-override-officer" class="form-input" style="width:100%;padding:10px;margin-bottom:20px" placeholder="e.g. OFF-001" autocomplete="off">
+      <div style="display:flex;justify-content:flex-end;gap:12px">
+        <button class="btn btn-secondary" onclick="document.getElementById('release-refugee-modal').style.display='none'">Cancel</button>
+        <button class="btn btn-primary" id="btn-submit-release">Authorize Release</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="toast-container"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

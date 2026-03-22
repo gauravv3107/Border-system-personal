@@ -104,12 +104,16 @@ def list_all_refugees():
     offset = int(request.args.get('offset', 0))
     db = get_db()
     try:
-        rows = db.execute("""
+        is_released = request.args.get('released') == 'true'
+        condition = "WHERE COALESCE(rr.processed, '') = 'Released'" if is_released else "WHERE COALESCE(rr.processed, '') != 'Released'"
+        
+        rows = db.execute(f"""
             SELECT rr.id AS reg_id, rr.provisional_id, rr.force, rr.registration_date,
-                   rr.assigned_ngo, rr.status AS reg_status, rr.entry_point,
+                   rr.assigned_ngo, rr.status AS reg_status, rr.entry_point, rr.processed,
                    e.name, e.nationality, e.assigned_camp, e.status AS entity_status
             FROM refugee_registrations rr
             JOIN entities e ON e.id = rr.entity_id
+            {condition}
             ORDER BY rr.registration_date DESC
             LIMIT ? OFFSET ?
         """, (limit, offset)).fetchall()
@@ -117,6 +121,73 @@ def list_all_refugees():
     finally:
         db.close()
     return api_response(data={'items': [dict(r) for r in rows], 'total': total})
+
+
+@dashboard_bp.route('/refugees/<reg_id>/release', methods=['POST'])
+def release_refugee(reg_id):
+    """Release a refugee completely from the tracker."""
+    data = request.get_json(silent=True) or {}
+    officer_id = data.get('officer_id', '').strip()
+    if not officer_id:
+        return api_error('Officer ID is required for release authorization')
+
+    db = get_db()
+    try:
+        # Verify the record exists
+        row = db.execute("SELECT provisional_id, status FROM refugee_registrations WHERE id=?", (reg_id,)).fetchone()
+        if not row:
+            return api_error("Refugee registration not found", 404)
+            
+        if row['status'] != 'Inactive':
+            return api_error("Aid has not been recieved yet")
+
+        prov_id = row['provisional_id']
+        
+        db.execute("UPDATE refugee_registrations SET processed='Released' WHERE id=?", (reg_id,))
+        
+        db.execute(
+            "INSERT INTO refugee_status_log (provisional_id, stage, updated_by) VALUES (?, 'released_from_camp', ?)",
+            (prov_id, officer_id)
+        )
+        db.execute(
+            "INSERT INTO alerts (type, message, severity, triggered_by, read) VALUES (?, ?, 'info', ?, 0)",
+            ('refugee_released', f"Refugee {prov_id} officially released from camp by officer {officer_id}.", officer_id)
+        )
+        db.commit()
+    finally:
+        db.close()
+    return api_response(message="Refugee successfully released")
+
+
+@dashboard_bp.route('/refugees/<reg_id>/undo-release', methods=['POST'])
+def undo_release_refugee(reg_id):
+    """Revert a released refugee back to at camp."""
+    data = request.get_json(silent=True) or {}
+    officer_id = data.get('officer_id', '').strip()
+    if not officer_id:
+        return api_error('Officer ID is required for authorization')
+
+    db = get_db()
+    try:
+        row = db.execute("SELECT provisional_id FROM refugee_registrations WHERE id=?", (reg_id,)).fetchone()
+        if not row:
+            return api_error("Refugee registration not found", 404)
+            
+        prov_id = row['provisional_id']
+        db.execute("UPDATE refugee_registrations SET processed='at camp' WHERE id=?", (reg_id,))
+        
+        db.execute(
+            "INSERT INTO refugee_status_log (provisional_id, stage, updated_by) VALUES (?, 'returned_to_camp', ?)",
+            (prov_id, officer_id)
+        )
+        db.execute(
+            "INSERT INTO alerts (type, message, severity, triggered_by, read) VALUES (?, ?, 'info', ?, 0)",
+            ('refugee_reverted', f"Refugee {prov_id} mathematically reverted back to camp by system officer {officer_id}.", officer_id)
+        )
+        db.commit()
+    finally:
+        db.close()
+    return api_response(message="Refugee successfully reverted to camp")
 
 
 @dashboard_bp.route('/ngo-list', methods=['GET'])
@@ -325,25 +396,6 @@ def get_all_ngos():
         db.close()
     return api_response(data=result)
 
-@dashboard_bp.route('/ngos', methods=['POST'])
-def create_ngo():
-    data = request.get_json(silent=True) or {}
-    if not data.get('name'):
-        return api_error('NGO name is required')
-    db = get_db()
-    try:
-        db.execute("""
-            INSERT INTO ngos (name, focus_area, contact_person, contact_email, max_capacity, lat, lng, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-        """, (data.get('name'), data.get('focus_area'), data.get('contact_person'), data.get('contact_email'), 
-              int(data.get('max_capacity', 0) or 0), data.get('lat'), data.get('lng')))
-        db.commit()
-    except Exception as e:
-        return api_error(str(e), 500)
-    finally:
-        db.close()
-    return api_response(message="NGO created successfully", status=201)
-
 @dashboard_bp.route('/ngos/<int:ngo_id>/approve', methods=['POST'])
 def approve_ngo(ngo_id):
     db = get_db()
@@ -429,7 +481,7 @@ def update_refugee(reg_id):
         # Return updated record
         updated = db.execute("""
             SELECT rr.id AS reg_id, rr.provisional_id, rr.force, rr.registration_date,
-                   rr.assigned_ngo, rr.status AS reg_status, rr.entry_point, rr.aid_requirement as assistance_type,
+                   rr.assigned_ngo, rr.status AS reg_status, rr.entry_point, rr.aid_requirement as assistance_type, rr.processed,
                    e.name, e.nationality, e.assigned_camp, e.status AS entity_status
             FROM refugee_registrations rr
             JOIN entities e ON e.id = rr.entity_id

@@ -62,6 +62,24 @@
           <input type="password" id="login-password" class="form-input" required placeholder="••••••••">
         </div>
         <button type="submit" class="btn btn-primary login-btn">Sign In to NGO Portal</button>
+        <div style="margin-top:20px; text-align:center; font-size:14px;">
+           <a href="#" onclick="toggleForm('register')" style="color:var(--color-primary);text-decoration:none;font-weight:600">Apply to Join as NGO</a>
+        </div>
+      </form>
+      
+      <form id="ngo-register-form" style="display:none">
+        <h3 style="margin-bottom:16px; color:var(--color-primary); font-size:16px; font-weight:700;">NGO Application Request</h3>
+        <div class="form-group"><label class="form-label">NGO Name *</label><input type="text" id="reg-name" required class="form-input" placeholder="e.g. Action Against Hunger"></div>
+        <div class="form-group"><label class="form-label">Focus Area</label><input type="text" id="reg-focus" class="form-input" placeholder="e.g. Legal Aid, Medical"></div>
+        <div class="form-group"><label class="form-label">Contact Person</label><input type="text" id="reg-contact" class="form-input"></div>
+        <div class="form-group"><label class="form-label">Max Capacity</label><input type="number" id="reg-capacity" class="form-input" value="100"></div>
+        <hr style="margin:20px 0; border:0; border-top:1px solid #e5e7eb;">
+        <div class="form-group"><label class="form-label">Admin Email *</label><input type="email" id="reg-email" required class="form-input" placeholder="admin@ngo.org"></div>
+        <div class="form-group"><label class="form-label">Admin Password *</label><input type="password" id="reg-password" required class="form-input" placeholder="••••••••"></div>
+        <button type="submit" class="btn btn-primary login-btn">Submit Application</button>
+        <div style="margin-top:20px; text-align:center; font-size:14px;">
+           <a href="#" onclick="toggleForm('login')" style="color:var(--color-text-muted);text-decoration:none;">&larr; Back to Login</a>
+        </div>
       </form>
     </div>
   </div>
@@ -98,6 +116,41 @@
         btn.innerText = 'Sign In to NGO Portal';
         btn.disabled = false;
       }
+    });
+
+    function toggleForm(type) {
+        document.getElementById('ngo-login-form').style.display = type === 'login' ? 'block' : 'none';
+        document.getElementById('ngo-register-form').style.display = type === 'register' ? 'block' : 'none';
+    }
+
+    document.getElementById('ngo-register-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.innerText = 'Submitting...';
+        btn.disabled = true;
+
+        const payload = {
+            name: document.getElementById('reg-name').value,
+            focus_area: document.getElementById('reg-focus').value,
+            contact_person: document.getElementById('reg-contact').value,
+            max_capacity: document.getElementById('reg-capacity').value,
+            email: document.getElementById('reg-email').value,
+            password: document.getElementById('reg-password').value
+        };
+
+        const res = await apiFetch('/api/auth/ngo-apply', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        if (res.success) {
+            showToast('Application submitted! Awaiting admin approval.', 'success');
+            setTimeout(() => { toggleForm('login'); document.getElementById('ngo-register-form').reset(); }, 2000);
+        } else {
+            showToast(res.message || 'Application failed', 'error');
+        }
+        btn.innerText = 'Submit Application';
+        btn.disabled = false;
     });
 
     // Auto-redirect if already logged in

@@ -13,7 +13,7 @@ def lookup(provisional_id):
     db = get_db()
     try:
         row = db.execute("""
-            SELECT rr.id as refugee_id, rr.provisional_id, rr.force, rr.entry_point, rr.registration_date,
+            SELECT rr.id as refugee_id, rr.provisional_id, rr.force, rr.entry_point, rr.registration_date, rr.processed,
                    rr.assigned_camp, rr.assigned_ngo, rr.help_tags, rr.status AS reg_status,
                    e.name, e.nationality, e.dob, e.gender, e.medical_needs, e.language_preference,
                    e.status AS entity_status, e.assigned_camp AS entity_camp,

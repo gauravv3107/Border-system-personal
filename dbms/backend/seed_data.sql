@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS entities (
     type               TEXT NOT NULL CHECK(type IN ('Traveler','Refugee','Migrant')),
     entry_point        TEXT,
     status             TEXT DEFAULT 'Pending'
-                       CHECK(status IN ('Verified','Flagged','Pending','Denied','Provisional')),
+                       CHECK(status IN ('Verified','Flagged','Pending','Denied','Provisional','Inactive')),
     risk_score         INTEGER DEFAULT 0 CHECK(risk_score BETWEEN 0 AND 100),
     is_blacklist       INTEGER DEFAULT 0,
     blacklist_reason   TEXT,

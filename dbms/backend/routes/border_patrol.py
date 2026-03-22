@@ -286,7 +286,7 @@ def list_refugees():
     db = get_db()
     try:
         rows = db.execute("""
-            SELECT rr.provisional_id, e.name, e.nationality, e.assigned_camp,
+            SELECT rr.provisional_id, e.name, e.nationality, e.assigned_camp, rr.processed,
                    e.assigned_ngo, rr.status, rr.registration_date, rr.force,
                    rr.entry_point, e.help_tags, e.medical_needs
             FROM refugee_registrations rr

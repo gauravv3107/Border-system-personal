@@ -194,7 +194,7 @@ def get_ngo_refugees(ngo_id):
         if not ngo:
             return api_error('NGO not found', 404)
         rows = db.execute("""
-            SELECT rr.id as reg_id, rr.provisional_id, rr.status as reg_status,
+            SELECT rr.id as reg_id, rr.provisional_id, rr.status as reg_status, rr.processed,
                    e.name, e.status, e.medical_needs, e.help_tags, e.gender, e.dob,
                    (SELECT MAX(date) FROM aid_distribution ad WHERE ad.refugee_id = rr.provisional_id) as last_aid_date
             FROM refugee_registrations rr
@@ -429,6 +429,12 @@ def case_resolve(refugee_id):
                 "UPDATE ngo_assignments SET case_status='resolved' WHERE refugee_registration_id=?",
                 (refugee_id,)
             )
+            
+            row = db.execute("SELECT entity_id FROM refugee_registrations WHERE id=?", (refugee_id,)).fetchone()
+            if row:
+                db.execute("UPDATE entities SET status='Inactive' WHERE id=?", (row['entity_id'],))
+            db.execute("UPDATE refugee_registrations SET status='Inactive' WHERE id=?", (refugee_id,))
+            
             db.commit()
         finally:
             db.close()
@@ -514,7 +520,7 @@ def get_ngo_cases(ngo_id):
             )
 
             rows = db.execute(f"""
-                SELECT rr.id as reg_id, rr.provisional_id, rr.status as reg_status,
+                SELECT rr.id as reg_id, rr.provisional_id, rr.status as reg_status, rr.processed,
                        rr.force, rr.assigned_camp,
                        e.name, e.nationality, e.status, e.medical_needs, e.help_tags,
                        e.gender, e.dob,

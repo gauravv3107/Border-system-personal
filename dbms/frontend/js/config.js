@@ -74,6 +74,12 @@ function formatDate(str) {
 
 function formatDateTime(str) {
   if (!str) return '—';
-  try { return new Date(str).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+  try {
+    let dStr = str;
+    if (typeof dStr === 'string' && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(dStr)) {
+      dStr = dStr.replace(' ', 'T') + 'Z';
+    }
+    return new Date(dStr).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
   catch { return str; }
 }

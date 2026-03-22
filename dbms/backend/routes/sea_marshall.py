@@ -37,9 +37,17 @@ def get_vessels():
     try:
         json_vessels = _load_json_vessels()
         db_vessels   = _load_db_vessels(db)
+        
         # Merge — DB vessels keyed by IMO take precedence over JSON if there's a collision
         json_imos = {v['imo'] for v in json_vessels}
         unique_db = [v for v in db_vessels if v['imo'] not in json_imos]
+        
+        # Merge DB vessel 'departed_at' values into JSON vessels if they already have an entry
+        override_db = {v['imo']: v.get('departed_at') for v in db_vessels if v.get('departed_at')}
+        for jv in json_vessels:
+            if jv['imo'] in override_db:
+                jv['departed_at'] = override_db[jv['imo']]
+                
         all_vessels = json_vessels + unique_db
         all_vessels = _apply_status_overrides(all_vessels, db)
     finally:
@@ -67,6 +75,11 @@ def get_vessel(imo):
             vessel['status'] = str(override['status'])  # pyre-ignore[6]
         if not vessel.get('movement_status'):
             vessel['movement_status'] = 'APPROACHING'  # pyre-ignore[6]
+            
+        # check if it has a DB departed_at overriding JSON value
+        db_vessel = db.execute("SELECT departed_at FROM vessels WHERE imo=?", (imo,)).fetchone()
+        if db_vessel and db_vessel['departed_at']:
+            vessel['departed_at'] = db_vessel['departed_at']
             
         # Add clearance defaults if missing from JSON vessels
         if 'health_clearance' not in vessel:
@@ -401,8 +414,10 @@ def set_movement_status():
 
     db = get_db()
     try:
-        # Update DB-registered vessels directly
-        db.execute("UPDATE vessels SET movement_status=? WHERE imo=?", (movement, imo))
+        if movement == 'DEPARTING':
+            db.execute("UPDATE vessels SET movement_status=?, departed_at=datetime('now') WHERE imo=?", (movement, imo))
+        else:
+            db.execute("UPDATE vessels SET movement_status=?, departed_at=NULL WHERE imo=?", (movement, imo))
         db.commit()
     except Exception as e:
         db.close()

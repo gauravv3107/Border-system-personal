@@ -428,7 +428,7 @@ async function loadRefugeeTable() {
   tbody.style.cssText = ''; 
   tbody.innerHTML = res.data.items.map(r => `
     <tr>
-      <td class="font-mono" style="font-size:12px">${r.provisional_id}</td>
+      <td class="font-mono" style="font-size:12px">${r.provisional_id}<br><span style="color:var(--color-primary);font-size:10px">Processed: ${r.processed || 'at camp'}</span></td>
       <td><strong>${r.name}</strong></td>
       <td>${r.nationality}</td>
       <td>${formatDate(r.registration_date)}</td>

@@ -62,6 +62,12 @@ def ngo_login():
         ).fetchone()
 
         if user:
+            ngo = db.execute("SELECT status FROM ngos WHERE id = ?", (user['ngo_id'],)).fetchone()
+            if ngo and ngo['status'] == 'pending':
+                return api_error('Your NGO application is pending approval by Border Control Admins', 403)
+            if ngo and ngo['status'] == 'deactivated':
+                return api_error('Your NGO access has been deactivated', 403)
+
             session_data = {
                 'token': f"ngo_token_{user['id']}",
                 'role': user['role'],
@@ -78,3 +84,39 @@ def ngo_login():
 @auth_bp.route('/session', methods=['GET'])
 def get_session():
     return api_response(data={'logged_in': True})
+
+
+@auth_bp.route('/ngo-apply', methods=['POST'])
+def ngo_apply():
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    email = data.get('email', '').strip()
+    password = data.get('password', '').strip()
+    
+    if not name or not email or not password:
+        return api_error('NGO Name, email, and password are required', 400)
+    
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if existing:
+            return api_error('Email is already registered', 400)
+        
+        cursor = db.execute("""
+            INSERT INTO ngos (name, focus_area, contact_person, contact_email, max_capacity, status)
+            VALUES (?, ?, ?, ?, ?, 'pending')
+        """, (name, data.get('focus_area', ''), data.get('contact_person', ''), email, int(data.get('max_capacity', 100) or 100)))
+        ngo_id = cursor.lastrowid
+        
+        db.execute("""
+            INSERT INTO users (name, email, password, role, ngo_id)
+            VALUES (?, ?, ?, 'ngo_admin', ?)
+        """, (f"{name} Admin", email, password, ngo_id))
+        
+        db.commit()
+    except Exception as e:
+        return api_error(str(e), 500)
+    finally:
+        db.close()
+        
+    return api_response(message="Application submitted successfully. Pending Admin approval.", status=201)

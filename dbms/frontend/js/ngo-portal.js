@@ -84,7 +84,7 @@ async function loadAssignments() {
       <div class="assignment-card status-completed" id="assignment-${a.reg_id}">
         <div class="assignment-card-header" style="cursor:pointer" onclick="toggleTimeline('${a.provisional_id}', ${a.reg_id})">
           <div>
-            <div class="assignment-prov">${a.provisional_id || 'N/A'}</div>
+            <div class="assignment-prov">${a.provisional_id || 'N/A'} <span style="font-size:10px;font-weight:normal;color:var(--color-primary)">(Processed: ${a.processed || 'at camp'})</span></div>
             <div class="assignment-force">${a.name || '—'}</div>
           </div>
           <div style="display:flex;gap:12px;align-items:center">
@@ -111,7 +111,7 @@ async function loadAssignments() {
     return '<div class="assignment-card" style="border-left:4px solid var(--color-primary)" id="assignment-' + escapedId + '" data-aid-given="' + (aidGiven?'1':'0') + '" data-med-review="' + (medReview?'1':'0') + '">'
       + '<div class="assignment-card-header">'
       + '<div>'
-      + '<div class="assignment-prov">' + (a.provisional_id || 'N/A') + '</div>'
+      + '<div class="assignment-prov">' + (a.provisional_id || 'N/A') + ' <span style="font-size:10px;font-weight:normal;color:var(--color-primary)">(Processed: ' + (a.processed || 'at camp') + ')</span></div>'
       + '<div class="assignment-force">' + (a.name || '\u2014') + '</div>'
       + '</div>'
       + '<div id="badge-' + escapedId + '">' + statusBadge(st) + '</div>'

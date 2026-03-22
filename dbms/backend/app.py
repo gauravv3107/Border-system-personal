@@ -43,6 +43,20 @@ def create_app():
         """Serve uploaded passport photos."""
         return send_from_directory(UPLOADS_DIR, filename)
 
+    NGO_STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'ngo-frontend'))
+
+    @app.route('/ngo-portal')
+    @app.route('/ngo-portal/')
+    def serve_ngo_index():
+        return send_from_directory(NGO_STATIC_DIR, 'index.html')
+
+    @app.route('/ngo-portal/<path:path>')
+    def serve_ngo_static(path):
+        full = os.path.join(NGO_STATIC_DIR, path)
+        if os.path.exists(full):
+            return send_from_directory(NGO_STATIC_DIR, path)
+        return send_from_directory(NGO_STATIC_DIR, 'index.html')
+
     @app.route('/<path:path>')
     def serve_static(path):
         full = os.path.join(app.static_folder, path)

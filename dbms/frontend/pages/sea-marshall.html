@@ -226,6 +226,10 @@
         <div class="card-header">
           <span class="card-title" data-i18n="sea_marshall.table_title">Vessel Traffic Register — Indian EEZ</span>
           <div style="display:flex;gap:8px">
+            <select id="vessel-view-mode" onchange="renderVesselTable(_vessels)" class="btn btn-secondary btn-sm" style="background:#fff">
+              <option value="active">Active Traffic</option>
+              <option value="history">History</option>
+            </select>
             <button class="btn btn-secondary btn-sm" onclick="loadVessels()" data-i18n="common.refresh">↻ Refresh</button>
           </div>
         </div>

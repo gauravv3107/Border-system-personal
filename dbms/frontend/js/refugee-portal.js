@@ -55,6 +55,11 @@ async function lookupID() {
   status.classList.add('visible');
   document.getElementById('refugee-appeals-card').style.display = 'block';
   status.scrollIntoView({ behavior:'smooth', block:'start' });
+  
+  // Fix Leaflet tile loading issue when container display changes
+  if (_campMap) {
+    setTimeout(() => { _campMap.invalidateSize(); }, 250);
+  }
 }
 
 function renderStatusCard(data) {
@@ -108,7 +113,9 @@ function renderStatusCard(data) {
         icon: L.divIcon({
           className: '',
           html: `<div style="background:${isAssigned ? '#D97706' : '#8A95A3'};color:#fff;width:${isAssigned?28:22}px;height:${isAssigned?28:22}px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;font-size:12px;">⛺</div>`,
-          iconSize: isAssigned ? [28,28] : [22,22], iconAnchor: isAssigned ? [14,14] : [11,11]
+          iconSize: isAssigned ? [28,28] : [22,22], 
+          iconAnchor: isAssigned ? [14,14] : [11,11],
+          popupAnchor: isAssigned ? [0,-14] : [0,-11]
         })
       }).addTo(_campMap);
       marker.bindPopup(`<strong>${name}</strong><br>Capacity: ~${(CAMP_CAPACITY[name]||0).toLocaleString()}${isAssigned?'<br><span style="color:#D97706;font-weight:700">← Your assigned camp</span>':''}`);
